@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.pytest_cache/
+.mypy_cache/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Environment
+.env
+
+# Test / build
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Local artifacts
+*.log
+
+# Data exceptions
+# Keep only curated sample CSVs in repo
+data/raw/
+models/
