@@ -1,0 +1,11 @@
+customer_id,customer_city,customer_state,segment
+C001,London,England,Consumer
+C002,Manchester,England,Corporate
+C003,Birmingham,England,Consumer
+C004,Leeds,England,Home Office
+C005,Glasgow,Scotland,Consumer
+C006,Bristol,England,Corporate
+C007,Liverpool,England,Consumer
+C008,Cardiff,Wales,Home Office
+C009,Edinburgh,Scotland,Corporate
+C010,Nottingham,England,Consumer
