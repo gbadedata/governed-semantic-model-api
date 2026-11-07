@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Governed Semantic Model API - a Lambda function behind an IAM-authorised API Gateway HTTP API.
+
+Parameters:
+  FabricWorkspaceId:
+    Type: String
+    Description: Fabric / Power BI workspace (group) ID that holds the semantic model.
+  FabricDatasetId:
+    Type: String
+    Description: Semantic model (dataset) ID.
+  FabricCredentialsSecretArn:
+    Type: String
+    AllowedPattern: "^arn:aws:secretsmanager:.+"
+    Description: Secrets Manager secret holding JSON {"tenant_id", "client_id", "client_secret"} for the Entra service principal.
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues: [7, 14, 30, 60, 90, 180, 365]
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [arm64]
+    MemorySize: 512
+    Timeout: 29 # API Gateway's integration limit is 30 seconds
+
+Resources:
+  Api:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Auth:
+        EnableIamAuthorizer: true
+        DefaultAuthorizer: AWS_IAM # consumers sign requests with SigV4; no anonymous access
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 20
+        ThrottlingRateLimit: 10
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-api
+      RetentionInDays: !Ref LogRetentionDays
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-api
+      CodeUri: ../src/
+      Handler: semantic_api.lambda_handler.handler
+      Description: Serves approved metrics from the Fabric semantic model.
+      LoggingConfig:
+        LogGroup: !Ref ApiLogGroup
+        LogFormat: Text # the app already writes one JSON object per line
+      Environment:
+        Variables:
+          SEMANTIC_API_BACKEND: fabric
+          SEMANTIC_API_FABRIC_WORKSPACE_ID: !Ref FabricWorkspaceId
+          SEMANTIC_API_FABRIC_DATASET_ID: !Ref FabricDatasetId
+          SEMANTIC_API_FABRIC_SECRET_ARN: !Ref FabricCredentialsSecretArn
+          SEMANTIC_API_LOG_LEVEL: INFO
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref FabricCredentialsSecretArn # this one secret only
+      Events:
+        Metrics:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /v1/{proxy+}
+            Method: GET
+
+  FunctionErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: The API function raised unhandled errors.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ApiFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  Upstream5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: The API is returning 5xx responses (usually the semantic model is failing or throttling).
+      Namespace: AWS/ApiGateway
+      MetricName: 5xx
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref Api
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  ApiUrl:
+    Description: Base URL of the API (requests must be SigV4-signed).
+    Value: !Sub https://${Api}.execute-api.${AWS::Region}.amazonaws.com
+  FunctionName:
+    Value: !Ref ApiFunction

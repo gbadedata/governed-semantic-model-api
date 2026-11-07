@@ -1,0 +1,63 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev,aws]"
+      - name: Lint
+        run: ruff check src tests scripts
+      - name: Validate sample data
+        run: python scripts/validate_sample_data.py
+      - name: Tests
+        run: python -m pytest
+      - name: Validate the SAM template
+        run: cfn-lint infra/template.yaml
+
+  lambda-package:
+    # Build the deployment unit exactly as SAM would and invoke the handler from it,
+    # so a missing runtime dependency fails here rather than in AWS.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build package from src/requirements.txt only
+        run: |
+          pip install --target build/lambda -r src/requirements.txt
+          cp -r src/semantic_api build/lambda/
+      - name: Invoke the handler with an HTTP API event
+        env:
+          SEMANTIC_API_BACKEND: fabric
+          SEMANTIC_API_FABRIC_WORKSPACE_ID: ci-workspace
+          SEMANTIC_API_FABRIC_DATASET_ID: ci-dataset
+          SEMANTIC_API_FABRIC_TENANT_ID: ci-tenant
+          SEMANTIC_API_FABRIC_CLIENT_ID: ci-client
+          SEMANTIC_API_FABRIC_CLIENT_SECRET: ci-not-a-secret
+        working-directory: build/lambda
+        run: |
+          python -I - <<'EOF'
+          import sys
+          sys.path.insert(0, ".")
+          from semantic_api.lambda_handler import handler
+          event = {"version": "2.0", "rawPath": "/v1/health", "rawQueryString": "", "headers": {"host": "ci"},
+                   "requestContext": {"http": {"method": "GET", "path": "/v1/health", "sourceIp": "127.0.0.1",
+                                               "protocol": "HTTP/1.1"}, "requestId": "ci", "stage": "$default"},
+                   "isBase64Encoded": False}
+          response = handler(event, None)
+          assert response["statusCode"] == 200, response
+          print("handler OK:", response["body"])
+          EOF

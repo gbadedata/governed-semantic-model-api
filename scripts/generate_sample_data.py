@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
-from datetime import datetime
-import random
 import csv
+import random
+from datetime import datetime
+from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 SAMPLE_DIR = BASE_DIR / "data" / "sample"

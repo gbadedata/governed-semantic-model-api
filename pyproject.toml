@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "governed-semantic-model-api"
+version = "1.0.0"
+description = "Serve governed business metrics from a Fabric / Power BI semantic model through a secure API"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+# Keep in sync with src/requirements.txt (the Lambda deployment unit); a test enforces this.
+dependencies = [
+    "fastapi==0.162.2",
+    "httpx==0.28.1",
+    "pydantic-settings==2.16.2",
+    "mangum==0.22.0",
+]
+
+[project.optional-dependencies]
+# The local backend (DuckDB over the sample mart) is for development; production uses Fabric.
+local = ["duckdb==2.0.0"]
+aws = ["boto3==1.43.126"]
+dev = [
+    "duckdb==2.0.0",
+    "pytest==8.4.2",
+    "pandas==3.1.1",
+    "ruff==0.17.4",
+    "cfn-lint==1.60.0",
+    "uvicorn==0.54.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    # Third-party deprecations outside this project's control (Starlette's TestClient, Mangum on 3.12).
+    "ignore:Using `httpx` with `starlette.testclient`",
+    "ignore:There is no current event loop:DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
