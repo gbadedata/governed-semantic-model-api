@@ -29,4 +29,4 @@ build/
 # Data exceptions
 # Keep only curated sample CSVs in repo
 data/raw/
-models/
+models/.ruff_cache/

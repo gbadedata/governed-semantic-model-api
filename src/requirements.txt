@@ -1,0 +1,7 @@
+# Runtime dependencies for the Lambda package (SAM builds from this file).
+# Keep in sync with [project.dependencies] in pyproject.toml; a test enforces this.
+# boto3 is provided by the AWS Lambda Python runtime.
+fastapi==0.162.2
+httpx==0.28.1
+pydantic-settings==2.16.2
+mangum==0.22.0

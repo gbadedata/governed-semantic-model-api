@@ -1,0 +1,40 @@
+// Governed measures for the retail semantic model.
+// These implement the definitions in src/semantic_api/measures.py and docs/semantic_model_contract.md.
+// Paste into the DAX query view (or Tabular Editor) and use "Update model" to add them to the model.
+//
+// Model assumptions: fact_order_items[order_id] -> fact_orders[order_id] (many-to-one),
+// fact_payments[order_id] -> fact_orders[order_id] (many-to-one), fact_orders[order_date] ->
+// dim_date[full_date] (many-to-one), fact_order_items[product_id] -> dim_products[product_id].
+// All relationships filter in a single direction, from the dimension (or order) side.
+DEFINE
+    // Orders that count: Completed or Delivered, with at least one successful payment.
+    MEASURE fact_orders[Total Revenue] =
+        SUMX (
+            FILTER (
+                fact_orders,
+                fact_orders[order_status] IN { "Completed", "Delivered" }
+                    && CALCULATE ( COUNTROWS ( fact_payments ), fact_payments[payment_status] = "Paid" ) > 0
+            ),
+            CALCULATE ( SUM ( fact_order_items[item_total] ) )
+        )
+
+    MEASURE fact_orders[Total Orders] =
+        COUNTROWS (
+            FILTER (
+                fact_orders,
+                fact_orders[order_status] IN { "Completed", "Delivered" }
+                    && CALCULATE ( COUNTROWS ( fact_payments ), fact_payments[payment_status] = "Paid" ) > 0
+            )
+        )
+
+    MEASURE fact_orders[Average Order Value] =
+        DIVIDE ( [Total Revenue], [Total Orders] )
+
+// Check the measures against the sample mart: for 2025-01-01 to 2025-03-31 the API's local
+// backend returns Total Revenue 43430.95, Total Orders 69 and Average Order Value 629.43.
+EVALUATE
+    SUMMARIZECOLUMNS (
+        "Total Revenue", [Total Revenue],
+        "Total Orders", [Total Orders],
+        "Average Order Value", [Average Order Value]
+    )
